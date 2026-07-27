@@ -12,7 +12,11 @@ USE maayi_cms;
 CREATE TABLE users (
     user_id       INT AUTO_INCREMENT PRIMARY KEY,
     username      VARCHAR(50)  NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL
+    email         VARCHAR(120) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    -- 'admin' can manage users; 'member' is a normal registered account.
+    role          VARCHAR(20)  NOT NULL DEFAULT 'member',
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ---------- categories (requirement 2.4) ----------

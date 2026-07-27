@@ -12,16 +12,16 @@
 // ============================================================
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_login();
+require_admin();   // req 7.1: admin-only, not just logged in
 
 $id        = clean_id($_GET['id'] ?? null);   // 0 means "new page"
 $is_edit   = ($id > 0);
 $errors    = [];
 
-
+// Start with empty values for a new page.
 $page = ['title' => '', 'category_id' => '', 'body' => '', 'price' => ''];
 
-
+// If we are editing, load the existing row.
 if ($is_edit) {
     $stmt = $pdo->prepare('SELECT * FROM pages WHERE page_id = ?');
     $stmt->execute([$id]);
@@ -35,10 +35,10 @@ if ($is_edit) {
     $page = $found;
 }
 
-
+// Categories for the dropdown (requirement 2.4).
 $categories = $pdo->query('SELECT * FROM categories ORDER BY name')->fetchAll();
 
-
+// ---- Handle the form submission ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $page['title']       = trim($_POST['title'] ?? '');
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors) {
-   
+        // An empty dropdown choice is stored as NULL, not as an empty string.
         $category = ($page['category_id'] === '') ? null : (int)$page['category_id'];
 
         if ($is_edit) {

@@ -20,7 +20,7 @@ $stmt = $pdo->prepare(
 $stmt->execute([$id]);
 $page = $stmt->fetch();
 
-// No such page
+// No such page: show a simple message rather than a broken screen.
 if (!$page) {
     $title = 'Page not found';
     require_once __DIR__ . '/includes/header.php';
@@ -37,7 +37,7 @@ $body   = '';
 // ---- Handle a new comment (requirement 2.9) ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    
+    // Visitors are not logged in, so they supply their own name.
     $author = trim($_POST['author_name'] ?? '');
     $body   = trim($_POST['body'] ?? '');
 
@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         $insert->execute([$id, $author, $body]);
 
-        
+        // Redirect after saving so a refresh doesn't post the comment twice.
         $_SESSION['message'] = 'Thank you, your comment has been posted.';
         header('Location: ' . url('page.php?id=' . $id));
         exit;
@@ -109,7 +109,7 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 <?php endif; ?>
 
-<!-- Requirement 2.9:  -->
+<!-- Requirement 2.9: a plain text comment form (deliberately not WYSIWYG) -->
 <form method="post" class="box">
     <label>Your name
         <input type="text" name="author_name" value="<?= e($author) ?>" required>

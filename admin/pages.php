@@ -6,9 +6,13 @@
 // ============================================================
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_login();
+require_admin();   // req 7.1: admin-only, not just logged in
 
-
+// ---- Which column are we sorting by? ----------------------------------
+// The value from the URL is looked up in this list. Anything not in the
+// list is ignored and we fall back to 'title'. This is what makes it safe
+// to drop the column name into the SQL: it can only ever be one of these
+// three strings, never something the user typed.
 $allowed_sorts = [
     'title'      => 'title',
     'created_at' => 'created_at',
@@ -21,10 +25,10 @@ if (!isset($allowed_sorts[$sort])) {
 }
 $column = $allowed_sorts[$sort];
 
-
+// ---- Ascending or descending? ----
 $dir = (($_GET['dir'] ?? 'asc') === 'desc') ? 'DESC' : 'ASC';
 
-
+// ---- The query. MySQL does the sorting. ----
 $sql = "SELECT pages.*, categories.name AS category_name
         FROM pages
         LEFT JOIN categories ON pages.category_id = categories.category_id
@@ -32,7 +36,10 @@ $sql = "SELECT pages.*, categories.name AS category_name
 
 $pages = $pdo->query($sql)->fetchAll();
 
-
+/**
+ * Build a clickable column heading. Clicking the column you are already
+ * sorting by flips the direction, and an arrow shows the current state.
+ */
 function heading(string $col, string $label, string $sort, string $dir): string {
     $next = ($sort === $col && $dir === 'ASC') ? 'desc' : 'asc';
 
@@ -54,7 +61,7 @@ require_once __DIR__ . '/../includes/header.php';
     <a class="button" href="<?= url('admin/page-form.php') ?>">Add New Page</a>
 </div>
 
-
+<!-- Requirement 2.3: show which sort is currently applied -->
 <p class="hint">
     Sorted by <strong><?= e(str_replace('_', ' ', $sort)) ?></strong>,
     <?= $dir === 'ASC' ? 'ascending' : 'descending' ?>.

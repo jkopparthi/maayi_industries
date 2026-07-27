@@ -6,11 +6,11 @@
 // ============================================================
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_login();
+require_admin();   // req 7.1: admin-only, not just logged in
 
 $errors = [];
 
-
+// If an id is present we are editing that category, otherwise adding a new one.
 $edit_id = clean_id($_GET['edit'] ?? null);
 $name    = '';
 
@@ -22,7 +22,7 @@ if ($edit_id > 0) {
     if ($row) {
         $name = $row['name'];
     } else {
-        $edit_id = 0;   
+        $edit_id = 0;   // not found, fall back to "add new"
     }
 }
 
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// List of categories
+// List of categories, with how many pages use each one.
 $categories = $pdo->query(
     'SELECT categories.category_id, categories.name, COUNT(pages.page_id) AS page_count
        FROM categories

@@ -26,6 +26,30 @@ function require_login(): void {
 }
 
 /**
+ * REQUIREMENT 7.1 — is the logged-in user an administrator?
+ *
+ * Being logged in is not enough for the highest-level tasks (like
+ * managing other users). Those check this instead of logged_in().
+ */
+function is_admin(): bool {
+    return logged_in() && ($_SESSION['role'] ?? '') === 'admin';
+}
+
+/**
+ * REQUIREMENT 7.1 — guard for admin-only pages.
+ * A logged-in member who is not an admin is sent away with a message.
+ */
+function require_admin(): void {
+    require_login();   // not logged in at all -> login form
+
+    if (!is_admin()) {
+        $_SESSION['message'] = 'You do not have permission to view that page.';
+        header('Location: ' . url('index.php'));
+        exit;
+    }
+}
+
+/**
  * Build a link relative to the project root, so the app works
  * whether it sits at / or in a subfolder like /cms.
  */

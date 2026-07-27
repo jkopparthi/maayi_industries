@@ -19,7 +19,7 @@ require_once __DIR__ . '/includes/header.php';
 ?>
 
 <h1>Our Products</h1>
-<p class="hint">Click any product </p>
+<p class="hint">Click any product to read more and leave a comment.</p>
 
 <ul class="product-list">
     <?php foreach ($pages as $p): ?>
