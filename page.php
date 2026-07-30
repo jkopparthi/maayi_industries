@@ -30,6 +30,12 @@ if (!$page) {
     exit;
 }
 
+// Prices are visible ONLY to approved distributors.
+$dist_id = approved_distributor_id($pdo);
+$pricing = ($dist_id !== null)
+    ? price_for_distributor($pdo, $dist_id, (int)$page['page_id'], (float)$page['price'])
+    : null;
+
 $errors = [];
 $author = '';
 $body   = '';
@@ -76,8 +82,26 @@ require_once __DIR__ . '/includes/header.php';
     <h1><?= e($page['title']) ?></h1>
     <p class="meta">
         <?= $page['category_name'] ? e($page['category_name']) : 'Uncategorised' ?>
-        &middot; K<?= number_format((float)$page['price'], 2) ?>
+        <?php if ($pricing !== null): ?>
+            <?php if ($pricing['special']): ?>
+                &middot; <s>K<?= number_format($pricing['base'], 2) ?></s>
+                <strong>K<?= number_format($pricing['price'], 2) ?></strong>
+                <span class="hint">(your distributor price)</span>
+            <?php else: ?>
+                &middot; K<?= number_format($pricing['price'], 2) ?>
+            <?php endif; ?>
+        <?php endif; ?>
     </p>
+    <?php if ($pricing === null): ?>
+        <p class="hint">Prices are shown to approved distributors. <?php
+            if (!logged_in()) {
+                echo '<a href="' . url('login.php') . '">Log in</a> or <a href="'
+                   . url('register.php') . '">register</a>.';
+            } elseif (($_SESSION['role'] ?? '') === 'member') {
+                echo '<a href="' . url('apply.php') . '">Apply to become a distributor</a>.';
+            }
+        ?></p>
+    <?php endif; ?>
     <p><?= nl2br(e($page['body'])) ?></p>
 </article>
 

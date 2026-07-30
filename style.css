@@ -197,3 +197,103 @@ button:hover, .button:hover { background: #17395a; }
     font-size: 0.82rem;
     padding: 2rem 1rem;
 }
+
+/* ---- global search bar in the header (requirement 3.1) ---- */
+.searchbar {
+    background: #fff;
+    border-bottom: 1px solid #dfe4e9;
+    padding: 0.6rem 1.5rem;
+}
+.searchform {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    gap: 0.5rem;
+}
+.searchform input[type="search"] {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #c9d2da;
+    border-radius: 5px;
+    font: inherit;
+}
+.searchform button {
+    padding: 0.45rem 1rem;
+}
+
+/* ---- search filter form (requirement 3.2) ---- */
+form.box label {
+    display: inline-block;
+    margin-right: 1rem;
+}
+form.box select {
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #c9d2da;
+    border-radius: 5px;
+    font: inherit;
+}
+
+/* ---- pagination (requirement 3.3) ---- */
+.pagination {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    margin-top: 1.2rem;
+    flex-wrap: wrap;
+}
+.pagination a, .pagination .current {
+    padding: 0.35rem 0.7rem;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    text-decoration: none;
+    border: 1px solid #dfe4e9;
+    background: #fff;
+    color: #1f4e79;
+}
+.pagination a:hover { background: #edf1f5; }
+.pagination .current {
+    background: #1f4e79;
+    border-color: #1f4e79;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ---- distributor status banner (apply workflow) ---- */
+.status-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: #fff;
+    border: 1px solid #dfe4e9;
+    border-left: 5px solid #1f4e79;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.2rem;
+    flex-wrap: wrap;
+}
+.status-banner .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #1f4e79;
+    flex: 0 0 auto;
+}
+.status-banner .label {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #1f4e79;
+}
+.status-banner .msg { color: #4a5a68; font-size: 0.92rem; }
+
+/* pending = amber, active = green, deactivated = red */
+.status-banner.is-pending     { border-left-color: #c9862b; }
+.status-banner.is-pending .dot   { background: #c9862b; }
+.status-banner.is-pending .label { color: #8a5a12; }
+
+.status-banner.is-active      { border-left-color: #2e8b57; }
+.status-banner.is-active .dot    { background: #2e8b57; }
+.status-banner.is-active .label  { color: #1f6b41; }
+
+.status-banner.is-deactivated { border-left-color: #b23b3b; }
+.status-banner.is-deactivated .dot   { background: #b23b3b; }
+.status-banner.is-deactivated .label { color: #8a2b2b; }

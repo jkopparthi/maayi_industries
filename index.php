@@ -14,6 +14,10 @@ $pages = $pdo->query(
       ORDER BY categories.name, pages.title'
 )->fetchAll();
 
+// Prices are visible ONLY to approved distributors. Everyone else
+// (guests, members, pending/rejected) gets null and sees no price.
+$dist_id = approved_distributor_id($pdo);
+
 $title = 'Our Products';
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -27,7 +31,11 @@ require_once __DIR__ . '/includes/header.php';
             <a href="<?= url('page.php?id=' . $p['page_id']) ?>"><?= e($p['title']) ?></a>
             <span class="meta">
                 <?= $p['category_name'] ? e($p['category_name']) : 'Uncategorised' ?>
-                &middot; K<?= number_format((float)$p['price'], 2) ?>
+                <?php if ($dist_id !== null): ?>
+                    <?php $pr = price_for_distributor($pdo, $dist_id, (int)$p['page_id'], (float)$p['price']); ?>
+                    &middot; K<?= number_format($pr['price'], 2) ?>
+                    <?php if ($pr['special']): ?><span class="hint">(your price)</span><?php endif; ?>
+                <?php endif; ?>
             </span>
         </li>
     <?php endforeach; ?>

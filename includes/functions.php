@@ -50,6 +50,94 @@ function require_admin(): void {
 }
 
 /**
+ * Distributor application status for the logged-in user.
+ * Returns null if they are not logged in OR have never applied —
+ * the header uses that to show nothing at all in those cases.
+ *
+ * @return array{status:string,label:string,css:string,business_name:string}|null
+ */
+function distributor_status(PDO $pdo): ?array {
+    if (!logged_in()) {
+        return null;
+    }
+    $stmt = $pdo->prepare(
+        'SELECT approval_status, business_name FROM distributors WHERE user_id = ?'
+    );
+    $stmt->execute([$_SESSION['user_id']]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;   // has not applied
+    }
+
+    // DB value -> friendly label + CSS state class.
+    $map = [
+        'pending'  => ['Pending',     'is-pending'],
+        'approved' => ['Active',      'is-active'],
+        'rejected' => ['Deactivated', 'is-deactivated'],
+    ];
+    [$label, $css] = $map[$row['approval_status']]
+                     ?? [ucfirst($row['approval_status']), 'is-pending'];
+
+    return [
+        'status'        => $row['approval_status'],
+        'label'         => $label,
+        'css'           => $css,
+        'business_name' => $row['business_name'],
+    ];
+}
+
+/**
+ * The distributor_id of the logged-in user IF their application is
+ * approved; otherwise null. This is the single gate that decides who
+ * may see prices at all: guests, members, and pending/rejected
+ * distributors all get null.
+ */
+function approved_distributor_id(PDO $pdo): ?int {
+    if (!logged_in()) {
+        return null;
+    }
+    $stmt = $pdo->prepare(
+        "SELECT distributor_id FROM distributors
+          WHERE user_id = ? AND approval_status = 'approved'"
+    );
+    $stmt->execute([$_SESSION['user_id']]);
+    $id = $stmt->fetchColumn();
+    return $id === false ? null : (int)$id;
+}
+
+/**
+ * The price an APPROVED distributor should see for one product.
+ * Applies their special deal if one exists (fixed price, or a
+ * percentage off the regular price), otherwise returns the regular
+ * price. `base` is always the regular price for reference.
+ *
+ * @return array{price:float, base:float, special:bool}
+ */
+function price_for_distributor(PDO $pdo, int $distributor_id, int $page_id, float $base): array {
+    $stmt = $pdo->prepare(
+        'SELECT adjustment_percent, fixed_price
+           FROM distributor_pricing
+          WHERE distributor_id = ? AND page_id = ?'
+    );
+    $stmt->execute([$distributor_id, $page_id]);
+    $deal = $stmt->fetch();
+
+    if (!$deal) {
+        return ['price' => $base, 'base' => $base, 'special' => false];
+    }
+
+    if ($deal['fixed_price'] !== null) {
+        $price = (float)$deal['fixed_price'];
+    } elseif ($deal['adjustment_percent'] !== null) {
+        $price = round($base * (1 - (float)$deal['adjustment_percent'] / 100), 2);
+    } else {
+        $price = $base;   // row with neither value set: treat as no deal
+    }
+
+    return ['price' => $price, 'base' => $base, 'special' => true];
+}
+
+/**
  * Build a link relative to the project root, so the app works
  * whether it sits at / or in a subfolder like /cms.
  */

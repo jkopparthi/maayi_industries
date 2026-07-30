@@ -1,7 +1,7 @@
 # Maayi Industries CMS
 
 A PHP + MySQL (PDO) content management system.
-Covers requirements **2.1, 2.2, 2.3, 2.4, 2.7, 2.9, 7.1, 7.2, 7.3, 7.4 and 7.5** — 44 marks.
+Covers requirements **2.1, 2.2, 2.3, 2.4, 2.7, 2.9, 3.1, 3.2, 3.3, 7.1, 7.2, 7.3, 7.4 and 7.5** — 59 marks.
 
 ## Setup
 
@@ -48,6 +48,10 @@ Covers requirements **2.1, 2.2, 2.3, 2.4, 2.7, 2.9, 7.1, 7.2, 7.3, 7.4 and 7.5**
 | 7.4 Log out | `logout.php` | Destroys the session |
 | **7.5** Register an account | `register.php` | Username, email, password twice |
 | 7.5 Mismatched passwords rejected | `register.php` | Shown an error, asked to retry |
+| **3.1** Keyword search, LIKE + wildcards | `search.php` | Form is in `includes/header.php`, on every page |
+| 3.1 Results are links to pages | `search.php` | |
+| **3.2** Restrict search to a category | `search.php` | Dropdown; "All categories" = plain 3.1 |
+| **3.3** Paginated results | `search.php` | `LIMIT`/`OFFSET`, `RESULTS_PER_PAGE` constant |
 
 All four admin files call `require_login()` on the first few lines,
 so only logged-in users can create, edit, delete, or sort.
@@ -147,3 +151,67 @@ their username and email still filled in, so only the passwords need retyping.
 4. Now type `http://localhost/cms/admin/pages.php` directly in the address bar.
    You should be redirected away with "You do not have permission to view that page."
    That is requirement 7.1 working.
+
+## Content search (requirements 3.1 – 3.3)
+
+The search form lives in `includes/header.php`, so it appears at the top of
+every page in the site — this satisfies 3.1's requirement that the form be
+available everywhere, not just on a dedicated search page.
+
+### 3.1 — how the LIKE query works
+`search.php` matches the keyword against both the page title and body with:
+```sql
+WHERE title LIKE '%keyword%' OR body LIKE '%keyword%'
+```
+Any `%` or `_` the visitor actually types is escaped with `ESCAPE '!'` first, so
+those characters are matched literally instead of acting as SQL wildcards.
+Every value is bound as a parameter — the keyword is never concatenated into
+the query string.
+
+### 3.2 — the category dropdown
+The dropdown is built from the `categories` table plus an "All categories"
+option (value `0`). When a real category is chosen, `AND category_id = :cat`
+is added to the same query; choosing "All categories" leaves the query exactly
+as it is in 3.1. This is still a *page* search — the category only narrows
+which pages are considered, it does not search category names.
+
+### 3.3 — pagination
+Change the one constant at the top of `search.php` to test with a smaller or
+larger page size:
+```php
+const RESULTS_PER_PAGE = 3;
+```
+It defaults to 3 so pagination is easy to demonstrate with only 10 seeded
+products. The count query runs first to work out how many pages exist, then
+`LIMIT`/`OFFSET` fetches just that page's rows. Numbered links plus
+Previous/Next appear **only** when there is more than one page — searching
+something with 1–3 results shows no pagination bar at all, which is correct.
+
+I verified this against the seed data: searching a broad keyword like `"a"`
+returns all 10 products split across 4 pages of 3; searching `"whisky"` returns
+exactly 2 results on 1 page (no pagination shown); and searching `"water"`
+restricted to the Kombucha category correctly returns 0 results.
+
+## Distributor applications (added feature)
+
+Members can apply to become distributors, and admins review the requests.
+
+New files:
+- `apply.php` — the application form (members only; one application per user).
+- `admin/requests.php` — admin page to approve/reject pending applications.
+
+Modified files:
+- `includes/functions.php` — added `distributor_status()`.
+- `includes/header.php` — added the "Become a distributor" nav link, the
+  "Applications" admin link, and the status banner shown once a user applies.
+- `style.css` — added `.status-banner` styles.
+- `database.sql` — added the distributors / pricing / orders / order_items /
+  payments tables.
+
+Setup:
+- Fresh install: import `database.sql` (it drops and recreates everything).
+- Existing database with data you want to keep: import `add_commerce_tables.sql`
+  instead — it only adds the new tables and touches nothing else.
+
+Status labels: the database stores `pending` / `approved` / `rejected`; the
+site displays these as Pending / Active / Deactivated.
