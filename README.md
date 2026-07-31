@@ -215,3 +215,66 @@ Setup:
 
 Status labels: the database stores `pending` / `approved` / `rejected`; the
 site displays these as Pending / Active / Deactivated.
+
+## Staff / distributor separation (update)
+
+- **Users admin is now "Staff"** (`admin/users.php`) — shows company staff
+  accounts only. Roles come from the new `roles` table.
+- **Roles** (`admin/roles.php`, admin only) — create and name staff roles
+  such as Accountant. Built-in roles cannot be deleted.
+- **Distributors** (`admin/distributors.php`, staff: admin + accountant) —
+  a list of all distributors; click one to open `admin/distributor-view.php`
+  which shows full details, approve/reject for pending applications, and the
+  per-product pricing table (regular price shown for reference).
+- The old `admin/requests.php` and `admin/pricing.php` now redirect into the
+  Distributors area.
+
+Run `add_roles_table.sql` on an existing database (or re-import `database.sql`
+for a fresh install) so the `roles` table exists.
+
+## Ordering flow (added)
+
+Approved distributors:
+- Add products to a **session cart** from any product page; the cart persists
+  as they browse and is reachable from the nav (`cart.php`).
+- **Checkout** (`checkout.php`) places a credit order: status `pending`,
+  line prices snapshotted from their distributor pricing.
+- **My Orders** (`my-orders.php`) shows their orders and balance owed, with a
+  printable **receipt/invoice** (`receipt.php`) available any time.
+
+Staff (admin + accountant):
+- **Orders** (`admin/orders.php`) lists all orders. Pending orders can be
+  **Confirmed** or **Cancelled**; a note is REQUIRED to cancel.
+- Confirming an order is what adds its total to the distributor's balance.
+
+Balance owed = SUM(confirmed orders) − SUM(payments recorded). Derived on read.
+
+New column: `orders.cancel_note`. Run `add_order_cancel_note.sql` on an
+existing database (or re-import `database.sql` for a fresh install).
+
+## Payments (accountant)
+
+- **Payments** (`admin/payments.php`, staff: admin + accountant) lists approved
+  distributors with the amount each owes. Choose one to see the balance
+  breakdown (confirmed orders − payments), record a payment (amount, date,
+  optional note), and view payment history.
+- Recording a payment reduces the distributor's owed balance immediately.
+  Overpayment shows as a negative balance (credit).
+- The distributor's detail page (`admin/distributor-view.php`) now shows the
+  balance and a shortcut to record a payment.
+
+## Contextual search (update)
+
+The single header search box now adapts to the current page:
+- Distributors page -> searches distributors (business, contact, login, phone)
+- Orders page -> searches orders (distributor name, status, order number)
+- Staff page -> searches staff (username, email, role)
+- Payments page -> searches distributors
+- Everywhere else -> searches products
+
+Roles page now lists staff roles only (member/distributor are account types
+kept in the roles table but not shown as manageable roles).
+
+Note: 'member' and 'distributor' are built-in account types, not clutter —
+registration assigns 'member', approval assigns 'distributor'. They cannot be
+deleted. Forgot-password is planned for a later step.

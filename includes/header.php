@@ -17,12 +17,25 @@ require_once __DIR__ . '/functions.php';
         <a href="<?= url('index.php') ?>">Products</a>
         <?php if (logged_in()): ?>
             <?php if (is_admin()): ?>
-                <!-- Requirement 7.1: admin-only links -->
+                <!-- Admin-only: content + staff management -->
                 <a href="<?= url('admin/pages.php') ?>">Manage Pages</a>
                 <a href="<?= url('admin/categories.php') ?>">Categories</a>
-                <a href="<?= url('admin/users.php') ?>">Users</a>
-                <a href="<?= url('admin/requests.php') ?>">Applications</a>
-                <a href="<?= url('admin/pricing.php') ?>">Pricing</a>
+                <a href="<?= url('admin/users.php') ?>">Staff</a>
+                <a href="<?= url('admin/roles.php') ?>">Roles</a>
+            <?php endif; ?>
+            <?php if (isset($pdo) && is_staff($pdo)): ?>
+                <!-- Staff (admin + accountant + custom staff roles) -->
+                <a href="<?= url('admin/distributors.php') ?>">Distributors</a>
+                <a href="<?= url('admin/orders.php') ?>">Orders</a>
+                <a href="<?= url('admin/payments.php') ?>">Payments</a>
+            <?php endif; ?>
+            <?php
+                // Distributor shopping links — only for an approved distributor.
+                if (isset($pdo) && approved_distributor_id($pdo) !== null): ?>
+                <a href="<?= url('my-orders.php') ?>">My Orders</a>
+                <a href="<?= url('my-payments.php') ?>">My Payments</a>
+                <a href="<?= url('cart.php') ?>">Cart<?php
+                    $n = cart_count(); echo $n > 0 ? ' (' . $n . ')' : ''; ?></a>
             <?php endif; ?>
             <?php
                 // "Become a distributor" — only for a plain member who
@@ -43,10 +56,11 @@ require_once __DIR__ . '/functions.php';
     </nav>
 </header>
 
-<!-- Requirement 3.1: a search form available at the top of every page -->
+<!-- Global search: adapts to the current page (products, distributors, orders, staff) -->
+<?php $search = search_context(); ?>
 <div class="searchbar">
-    <form action="<?= url('search.php') ?>" method="get" class="searchform">
-        <input type="search" name="q" placeholder="Search products…"
+    <form action="<?= e($search['action']) ?>" method="get" class="searchform">
+        <input type="search" name="q" placeholder="<?= e($search['placeholder']) ?>"
                value="<?= isset($_GET['q']) ? e($_GET['q']) : '' ?>">
         <button type="submit">Search</button>
     </form>

@@ -50,6 +50,54 @@ function require_admin(): void {
 }
 
 /**
+ * All staff role names (is_staff = 1), e.g. ['admin','accountant'].
+ * Cached per request so repeated calls don't re-query.
+ */
+function staff_role_names(PDO $pdo): array {
+    static $cache = null;
+    if ($cache === null) {
+        try {
+            $cache = $pdo->query(
+                'SELECT name FROM roles WHERE is_staff = 1'
+            )->fetchAll(PDO::FETCH_COLUMN);
+        } catch (Throwable $e) {
+            // roles table not created yet -> fall back to built-in staff.
+            $cache = ['admin', 'accountant'];
+        }
+    }
+    return $cache;
+}
+
+/**
+ * Is the logged-in user company staff (any role with is_staff = 1)?
+ * Admin is always staff even if the roles table is missing.
+ */
+function is_staff(PDO $pdo): bool {
+    if (!logged_in()) {
+        return false;
+    }
+    $role = $_SESSION['role'] ?? '';
+    if ($role === 'admin') {
+        return true;
+    }
+    return in_array($role, staff_role_names($pdo), true);
+}
+
+/**
+ * Guard for staff pages (distributor approvals, pricing, etc.).
+ * Admin + accountant + any other staff role may pass.
+ */
+function require_staff(PDO $pdo): void {
+    require_login();
+
+    if (!is_staff($pdo)) {
+        $_SESSION['message'] = 'You do not have permission to view that page.';
+        header('Location: ' . url('index.php'));
+        exit;
+    }
+}
+
+/**
  * Distributor application status for the logged-in user.
  * Returns null if they are not logged in OR have never applied —
  * the header uses that to show nothing at all in those cases.
@@ -135,6 +183,156 @@ function price_for_distributor(PDO $pdo, int $distributor_id, int $page_id, floa
     }
 
     return ['price' => $price, 'base' => $base, 'special' => true];
+}
+
+/* ---------------- Cart (session-based) ---------------- */
+// Stored as $_SESSION['cart'] = [page_id => quantity]. Cleared on logout.
+
+function cart_items(): array {
+    return $_SESSION['cart'] ?? [];
+}
+
+function cart_count(): int {
+    return array_sum(cart_items());
+}
+
+function cart_add(int $page_id, int $qty = 1): void {
+    if ($qty < 1) $qty = 1;
+    $_SESSION['cart'][$page_id] = (cart_items()[$page_id] ?? 0) + $qty;
+}
+
+function cart_set(int $page_id, int $qty): void {
+    if ($qty < 1) {
+        cart_remove($page_id);
+    } else {
+        $_SESSION['cart'][$page_id] = $qty;
+    }
+}
+
+function cart_remove(int $page_id): void {
+    unset($_SESSION['cart'][$page_id]);
+}
+
+function cart_clear(): void {
+    unset($_SESSION['cart']);
+}
+
+/**
+ * Expand the cart into full line rows priced for this distributor.
+ * @return array{lines:array<int,array>, total:float}
+ */
+function cart_detailed(PDO $pdo, int $distributor_id): array {
+    $items = cart_items();
+    $lines = [];
+    $total = 0.0;
+    if (!$items) {
+        return ['lines' => [], 'total' => 0.0];
+    }
+
+    $ids = array_map('intval', array_keys($items));
+    $in  = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare("SELECT page_id, title, price FROM pages WHERE page_id IN ($in)");
+    $stmt->execute($ids);
+    $products = [];
+    foreach ($stmt->fetchAll() as $p) {
+        $products[(int)$p['page_id']] = $p;
+    }
+
+    foreach ($items as $pid => $qty) {
+        $pid = (int)$pid;
+        if (!isset($products[$pid])) {
+            continue;   // product removed since it was added
+        }
+        $base    = (float)$products[$pid]['price'];
+        $pricing = price_for_distributor($pdo, $distributor_id, $pid, $base);
+        $lineTotal = $pricing['price'] * $qty;
+        $total    += $lineTotal;
+        $lines[] = [
+            'page_id'    => $pid,
+            'title'      => $products[$pid]['title'],
+            'quantity'   => $qty,
+            'unit_price' => $pricing['price'],
+            'line_total' => $lineTotal,
+        ];
+    }
+    return ['lines' => $lines, 'total' => round($total, 2)];
+}
+
+/* ---------------- Distributor balance ---------------- */
+/**
+ * Amount owed = sum of CONFIRMED orders minus sum of payments recorded.
+ * Derived on read; never stored.
+ */
+function distributor_balance(PDO $pdo, int $distributor_id): float {
+    $c = $pdo->prepare(
+        "SELECT COALESCE(SUM(total_amount),0)
+           FROM orders
+          WHERE distributor_id = ? AND order_status = 'confirmed'"
+    );
+    $c->execute([$distributor_id]);
+    $confirmed = (float)$c->fetchColumn();
+
+    $p = $pdo->prepare(
+        'SELECT COALESCE(SUM(amount),0) FROM payments WHERE distributor_id = ?'
+    );
+    $p->execute([$distributor_id]);
+    $paid = (float)$p->fetchColumn();
+
+    return round($confirmed - $paid, 2);
+}
+
+/**
+ * Full balance breakdown for a distributor: the confirmed-orders total,
+ * the payments total, and the resulting amount owed. Handy where the UI
+ * wants to show the components, not just the net figure.
+ *
+ * @return array{confirmed:float, paid:float, owed:float}
+ */
+function distributor_balance_breakdown(PDO $pdo, int $distributor_id): array {
+    $c = $pdo->prepare(
+        "SELECT COALESCE(SUM(total_amount),0)
+           FROM orders
+          WHERE distributor_id = ? AND order_status = 'confirmed'"
+    );
+    $c->execute([$distributor_id]);
+    $confirmed = (float)$c->fetchColumn();
+
+    $p = $pdo->prepare(
+        'SELECT COALESCE(SUM(amount),0) FROM payments WHERE distributor_id = ?'
+    );
+    $p->execute([$distributor_id]);
+    $paid = (float)$p->fetchColumn();
+
+    return [
+        'confirmed' => round($confirmed, 2),
+        'paid'      => round($paid, 2),
+        'owed'      => round($confirmed - $paid, 2),
+    ];
+}
+
+/**
+ * Context-aware search target for the global header box.
+ * Looks at the current script and returns where the search should go
+ * and a matching placeholder, so the same box searches distributors on
+ * the distributors page, orders on the orders page, etc., and products
+ * everywhere else.
+ *
+ * @return array{action:string, placeholder:string}
+ */
+function search_context(): array {
+    $script = $_SERVER['SCRIPT_NAME'] ?? '';
+    $map = [
+        'admin/distributors.php' => ['admin/distributors.php', 'Search distributors…'],
+        'admin/orders.php'       => ['admin/orders.php',        'Search orders…'],
+        'admin/users.php'        => ['admin/users.php',         'Search staff…'],
+        'admin/payments.php'     => ['admin/payments.php',      'Search distributors…'],
+    ];
+    foreach ($map as $needle => $cfg) {
+        if (str_ends_with($script, $needle)) {
+            return ['action' => url($cfg[0]), 'placeholder' => $cfg[1]];
+        }
+    }
+    return ['action' => url('search.php'), 'placeholder' => 'Search products…'];
 }
 
 /**

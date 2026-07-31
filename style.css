@@ -297,3 +297,59 @@ form.box select {
 .status-banner.is-deactivated { border-left-color: #b23b3b; }
 .status-banner.is-deactivated .dot   { background: #b23b3b; }
 .status-banner.is-deactivated .label { color: #8a2b2b; }
+
+/* ---- status pills (admin distributor area) ---- */
+.pill {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid;
+    vertical-align: middle;
+}
+.pill.is-pending     { color: #8a5a12; border-color: #c9862b; background: #fbf1dc; }
+.pill.is-active      { color: #1f6b41; border-color: #2e8b57; background: #e6f3ec; }
+.pill.is-deactivated { color: #8a2b2b; border-color: #b23b3b; background: #f7e3e3; }
+
+/* ---- key/value detail table ---- */
+table.detail th {
+    width: 160px;
+    text-align: left;
+    vertical-align: top;
+    color: #4a5a68;
+    background: none;
+    font-weight: 600;
+}
+table.detail td { vertical-align: top; }
+
+/* ---- cart / orders extras ---- */
+.add-to-cart { display:flex; gap:.5rem; align-items:center; margin:.75rem 0; }
+.add-to-cart label { margin:0; }
+summary.button-like {
+    display:inline-block; cursor:pointer; padding:.35rem .7rem;
+    background:#e6e9ee; border-radius:4px; font-size:.9rem; list-style:none;
+}
+summary.button-like::-webkit-details-marker { display:none; }
+
+/* ---- print (receipt/invoice) ---- */
+@media print {
+    .site-header, footer, .no-print, .no-print-flex button,
+    nav, .notice { display:none !important; }
+    body { background:#fff; }
+    .wrap { max-width:none; margin:0; padding:0; }
+    .receipt .box, .receipt table { border-color:#000; }
+}
+
+/* ---- checkout confirmation dialog ---- */
+dialog.cart-dialog {
+    border: 1px solid #cfd6dd;
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-width: 520px;
+    width: calc(100% - 2rem);
+    box-shadow: 0 10px 40px rgba(0,0,0,.25);
+}
+dialog.cart-dialog::backdrop { background: rgba(20,35,27,.45); }
+dialog.cart-dialog h2 { margin-top: 0; }
+dialog.cart-dialog table { width: 100%; margin-bottom: .5rem; }

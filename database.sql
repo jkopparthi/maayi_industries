@@ -160,6 +160,7 @@ CREATE TABLE orders (
     order_source   VARCHAR(20)   NOT NULL,
     payment_status VARCHAR(20)   NOT NULL,
     order_status   VARCHAR(20)   NOT NULL DEFAULT 'pending',
+    cancel_note    VARCHAR(255)  NULL,
     total_amount   DECIMAL(12,2) NOT NULL,
     created_by     INT           NULL,
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -196,3 +197,20 @@ CREATE TABLE payments (
         FOREIGN KEY (recorded_by) REFERENCES users(user_id) ON DELETE SET NULL,
     CONSTRAINT chk_amount CHECK (amount > 0)
 );
+
+-- ============================================================
+-- Roles (data-driven, so admins can add staff roles like accountant)
+-- ============================================================
+CREATE TABLE roles (
+    role_id   INT AUTO_INCREMENT PRIMARY KEY,
+    name      VARCHAR(40)  NOT NULL UNIQUE,
+    label     VARCHAR(60)  NOT NULL,
+    is_staff  TINYINT(1)   NOT NULL DEFAULT 1,
+    is_system TINYINT(1)   NOT NULL DEFAULT 0
+);
+
+INSERT INTO roles (name, label, is_staff, is_system) VALUES
+    ('admin',       'Administrator', 1, 1),
+    ('accountant',  'Accountant',    1, 0),
+    ('member',      'Member',        0, 1),
+    ('distributor', 'Distributor',   0, 1);

@@ -16,7 +16,15 @@ $id      = clean_id($_GET['id'] ?? null);   // 0 means "new user"
 $is_edit = ($id > 0);
 $errors  = [];
 
-$user = ['username' => '', 'email' => '', 'role' => 'member'];
+// Staff roles available for assignment (admin, accountant, any custom).
+$staff_roles = $pdo->query(
+    'SELECT name, label FROM roles WHERE is_staff = 1 ORDER BY name'
+)->fetchAll();
+$staff_names = array_column($staff_roles, 'name');
+$default_role = in_array('accountant', $staff_names, true) ? 'accountant'
+              : ($staff_names[0] ?? 'admin');
+
+$user = ['username' => '', 'email' => '', 'role' => $default_role];
 
 if ($is_edit) {
     $stmt = $pdo->prepare('SELECT * FROM users WHERE user_id = ?');
@@ -35,7 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $user['username'] = trim($_POST['username'] ?? '');
     $user['email']    = trim($_POST['email'] ?? '');
-    $user['role']     = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
+    // Only allow assigning a valid staff role.
+    $posted_role      = $_POST['role'] ?? $default_role;
+    $user['role']     = in_array($posted_role, $staff_names, true) ? $posted_role : $default_role;
     $password         = $_POST['password'] ?? '';
     $password2        = $_POST['password_confirm'] ?? '';
 
@@ -83,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Don't let the last admin demote themselves to member.
-    if (!$errors && $is_edit && $user['role'] === 'member') {
+    // Don't let the last admin demote themselves away from admin.
+    if (!$errors && $is_edit && $user['role'] !== 'admin') {
         $admins = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
         $was    = $pdo->prepare('SELECT role FROM users WHERE user_id = ?');
         $was->execute([$id]);
@@ -164,8 +174,12 @@ require_once __DIR__ . '/../includes/header.php';
 
     <label>Role
         <select name="role">
-            <option value="member" <?= $user['role'] === 'member' ? 'selected' : '' ?>>Member</option>
-            <option value="admin"  <?= $user['role'] === 'admin'  ? 'selected' : '' ?>>Administrator</option>
+            <?php foreach ($staff_roles as $sr): ?>
+                <option value="<?= e($sr['name']) ?>"
+                    <?= $user['role'] === $sr['name'] ? 'selected' : '' ?>>
+                    <?= e($sr['label']) ?>
+                </option>
+            <?php endforeach; ?>
         </select>
     </label>
 

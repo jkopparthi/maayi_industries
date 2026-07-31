@@ -40,24 +40,50 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-$users = $pdo->query(
-    'SELECT user_id, username, email, role, created_at
-       FROM users
-      ORDER BY role, username'
-)->fetchAll();
+$q = trim($_GET['q'] ?? '');
 
-$title = 'Manage Users';
+if ($q !== '') {
+    $like = '%' . $q . '%';
+    $stmt = $pdo->prepare(
+        "SELECT u.user_id, u.username, u.email, u.role, u.created_at,
+                COALESCE(r.label, u.role) AS role_label
+           FROM users u
+      LEFT JOIN roles r ON r.name = u.role
+          WHERE COALESCE(r.is_staff, 0) = 1
+            AND (u.username LIKE ? OR u.email LIKE ? OR COALESCE(r.label, u.role) LIKE ?)
+          ORDER BY u.role, u.username"
+    );
+    $stmt->execute([$like, $like, $like]);
+    $users = $stmt->fetchAll();
+} else {
+    $users = $pdo->query(
+        "SELECT u.user_id, u.username, u.email, u.role, u.created_at,
+                COALESCE(r.label, u.role) AS role_label
+           FROM users u
+      LEFT JOIN roles r ON r.name = u.role
+          WHERE COALESCE(r.is_staff, 0) = 1
+          ORDER BY u.role, u.username"
+    )->fetchAll();
+}
+
+$title = 'Manage Staff';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="head-row">
-    <h1>Manage Users</h1>
-    <a class="button" href="<?= url('admin/user-form.php') ?>">Add New User</a>
+    <h1>Manage Staff</h1>
+    <a class="button" href="<?= url('admin/user-form.php') ?>">Add Staff User</a>
 </div>
 
 <p class="hint">
-    Administrators can manage pages, categories and other users.
-    Members can log in but cannot reach the admin area.
+    <?php if ($q !== ''): ?>
+        Showing staff matching "<strong><?= e($q) ?></strong>".
+        <a href="<?= url('admin/users.php') ?>">Clear</a>
+    <?php else: ?>
+        Company staff accounts only. Distributors and their applications are
+        managed under <a href="<?= url('admin/distributors.php') ?>">Distributors</a>.
+        Create or name roles under <a href="<?= url('admin/roles.php') ?>">Roles</a>.
+    <?php endif; ?>
 </p>
 
 <table>
@@ -78,7 +104,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
             </td>
             <td><?= e($u['email']) ?></td>
-            <td><?= e($u['role']) ?></td>
+            <td><?= e($u['role_label']) ?></td>
             <td><?= date('Y-m-d', strtotime($u['created_at'])) ?></td>
             <td class="actions">
                 <a href="<?= url('admin/user-form.php?id=' . $u['user_id']) ?>">Edit</a>

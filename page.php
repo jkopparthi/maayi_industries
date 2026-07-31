@@ -102,6 +102,17 @@ require_once __DIR__ . '/includes/header.php';
             }
         ?></p>
     <?php endif; ?>
+    <?php if ($dist_id !== null): ?>
+        <form method="post" action="<?= url('cart.php') ?>" class="add-to-cart">
+            <input type="hidden" name="action" value="add">
+            <input type="hidden" name="page_id" value="<?= (int)$page['page_id'] ?>">
+            <input type="hidden" name="return" value="<?= e(url('page.php?id=' . (int)$page['page_id'])) ?>">
+            <label>Qty
+                <input type="number" name="quantity" value="1" min="1" style="width:4.5rem">
+            </label>
+            <button type="submit">Add to cart</button>
+        </form>
+    <?php endif; ?>
     <p><?= nl2br(e($page['body'])) ?></p>
 </article>
 

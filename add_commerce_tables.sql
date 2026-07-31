@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS orders (
     order_source   VARCHAR(20)   NOT NULL,
     payment_status VARCHAR(20)   NOT NULL,
     order_status   VARCHAR(20)   NOT NULL DEFAULT 'pending',
+    cancel_note    VARCHAR(255)  NULL,
     total_amount   DECIMAL(12,2) NOT NULL,
     created_by     INT           NULL,
     created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
