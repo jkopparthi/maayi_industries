@@ -32,6 +32,7 @@ if (!$page) {
 
 // Prices are visible ONLY to approved distributors.
 $dist_id = approved_distributor_id($pdo);
+$img     = page_image($pdo, (int)$page['page_id']);
 $pricing = ($dist_id !== null)
     ? price_for_distributor($pdo, $dist_id, (int)$page['page_id'], (float)$page['price'])
     : null;
@@ -80,6 +81,11 @@ require_once __DIR__ . '/includes/header.php';
 
 <article class="box">
     <h1><?= e($page['title']) ?></h1>
+    <?php if ($img): ?>
+        <img class="page-image"
+             src="<?= url('uploads/' . rawurlencode($img['filename'])) ?>"
+             alt="<?= e($page['title']) ?>">
+    <?php endif; ?>
     <p class="meta">
         <?= $page['category_name'] ? e($page['category_name']) : 'Uncategorised' ?>
         <?php if ($pricing !== null): ?>

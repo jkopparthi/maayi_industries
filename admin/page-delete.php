@@ -12,6 +12,10 @@ $id = clean_id($_GET['id'] ?? null);
 if ($id > 0) {
     // Comments are removed automatically by the foreign key
     // (ON DELETE CASCADE on the comments table).
+    // Remove the image file from disk first (the DB row would cascade,
+    // but the file would be orphaned in /uploads).
+    page_image_delete($pdo, $id);
+
     $stmt = $pdo->prepare('DELETE FROM pages WHERE page_id = ?');
     $stmt->execute([$id]);
     $_SESSION['message'] = 'Page deleted.';

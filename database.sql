@@ -41,6 +41,17 @@ CREATE TABLE pages (
         ON DELETE SET NULL
 );
 
+-- ---------- images (one image per product, uploaded by admin) ----------
+CREATE TABLE images (
+    image_id      INT          AUTO_INCREMENT PRIMARY KEY,
+    page_id       INT          NOT NULL,
+    filename      VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255) NULL,
+    uploaded_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_images_page
+        FOREIGN KEY (page_id) REFERENCES pages(page_id) ON DELETE CASCADE
+);
+
 -- ---------- comments (requirement 2.9) ----------
 CREATE TABLE comments (
     comment_id  INT AUTO_INCREMENT PRIMARY KEY,

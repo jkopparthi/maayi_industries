@@ -22,6 +22,11 @@ if ($dist_id === null) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $return = $_POST['return'] ?? url('cart.php');
+    // Only follow same-site relative paths - never an absolute URL,
+    // so a crafted form cannot bounce the user to another site.
+    if (!is_string($return) || $return === '' || $return[0] !== '/' || substr($return, 0, 2) === '//') {
+        $return = url('cart.php');
+    }
 
     if ($action === 'add') {
         $pid = clean_id($_POST['page_id'] ?? null);

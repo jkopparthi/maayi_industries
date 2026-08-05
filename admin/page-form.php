@@ -35,6 +35,9 @@ if ($is_edit) {
     $page = $found;
 }
 
+// Existing image, if any (drives the preview + remove checkbox on edit).
+$existing_image = $is_edit ? page_image($pdo, $id) : null;
+
 // Categories for the dropdown (requirement 2.4).
 $categories = $pdo->query('SELECT * FROM categories ORDER BY name')->fetchAll();
 
@@ -68,14 +71,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   WHERE page_id = ?'
             );
             $stmt->execute([$page['title'], $category, $page['body'], $page['price'], $id]);
-            $_SESSION['message'] = 'Page updated.';
+
+            // Image handling: remove if ticked, then save a new one if chosen.
+            if (!empty($_POST['remove_image'])) {
+                page_image_delete($pdo, $id);
+            }
+            $img_error = page_image_save($pdo, $id, $_FILES['image'] ?? []);
+
+            $_SESSION['message'] = 'Page updated.'
+                . ($img_error !== '' ? ' But the image was rejected: ' . $img_error : '');
         } else {
             $stmt = $pdo->prepare(
                 'INSERT INTO pages (title, category_id, body, price)
                  VALUES (?, ?, ?, ?)'
             );
             $stmt->execute([$page['title'], $category, $page['body'], $page['price']]);
-            $_SESSION['message'] = 'Page created.';
+            $new_id = (int)$pdo->lastInsertId();
+
+            // Optional image on create. A rejected image does not stop
+            // the product being created - the admin is told why.
+            $img_error = page_image_save($pdo, $new_id, $_FILES['image'] ?? []);
+
+            $_SESSION['message'] = 'Page created.'
+                . ($img_error !== '' ? ' But the image was rejected: ' . $img_error : '');
         }
 
         header('Location: ' . url('admin/pages.php'));
@@ -99,7 +117,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 <?php endif; ?>
 
-<form method="post" class="box">
+<form method="post" class="box" enctype="multipart/form-data">
 
     <label>Title
         <input type="text" name="title" value="<?= e($page['title']) ?>" required>
@@ -125,6 +143,22 @@ require_once __DIR__ . '/../includes/header.php';
     <label>Description
         <textarea name="body" rows="7" required><?= e($page['body']) ?></textarea>
     </label>
+
+    <label>Product image
+        <input type="file" name="image" accept="image/*">
+        <span class="meta">JPEG, PNG, GIF or WEBP, up to 5 MB. Uploading replaces the current image.</span>
+    </label>
+
+    <?php if ($existing_image): ?>
+        <div class="current-image">
+            <img src="<?= url('uploads/' . rawurlencode($existing_image['filename'])) ?>"
+                 alt="<?= e($page['title']) ?>">
+            <label class="checkline">
+                <input type="checkbox" name="remove_image" value="1">
+                Remove this image
+            </label>
+        </div>
+    <?php endif; ?>
 
     <button type="submit"><?= $is_edit ? 'Save Changes' : 'Create Page' ?></button>
     <a class="cancel" href="<?= url('admin/pages.php') ?>">Cancel</a>

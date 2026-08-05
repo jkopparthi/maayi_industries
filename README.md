@@ -278,3 +278,25 @@ kept in the roles table but not shown as manageable roles).
 Note: 'member' and 'distributor' are built-in account types, not clutter —
 registration assigns 'member', approval assigns 'distributor'. They cannot be
 deleted. Forgot-password is planned for a later step.
+
+
+## Product images & the role-aware home page
+
+**Images.** Admins upload a product image when creating a product, and can
+replace or remove it any time from the edit form (upload a new file to replace;
+tick "Remove this image" to delete). Uploads are validated with `getimagesize()`
+— a script renamed to .jpg is rejected before it touches disk or database —
+resized by PHP GD to max 800px on the longest side, stored in `/uploads` with
+generated names, and recorded in the `images` table.
+
+**If you already have data:** run `add_images_table.sql` in phpMyAdmin once
+instead of re-importing `database.sql` (which would wipe your data).
+Make sure the `uploads/` folder exists and is writable.
+
+**Home page.** One `index.php`, three experiences:
+- **Guests / plain members** — a product gallery with images and description
+  teasers, NO prices (proposal rule 1), plus a register/apply nudge.
+- **Approved distributors** — an Amazon-style storefront: their own prices on
+  every tile, quantity + Add-to-cart buttons, a category filter bar, and a
+  cart summary panel at the top of the page with a checkout shortcut.
+- Both audiences get the category filter chips.

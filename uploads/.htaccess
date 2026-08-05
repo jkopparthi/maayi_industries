@@ -1,0 +1,5 @@
+# Images only — never execute scripts from this folder.
+php_flag engine off
+<FilesMatch "\.(php|phtml|phar|cgi|pl)$">
+    Require all denied
+</FilesMatch>

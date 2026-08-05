@@ -361,3 +361,171 @@ function clean_id($value): int {
     $id = filter_var($value, FILTER_VALIDATE_INT);
     return ($id === false || $id < 1) ? 0 : $id;
 }
+
+/* ---------------- Product images ---------------- */
+// One image per product. Files live in /uploads with generated names;
+// the images table maps them to pages.
+
+define('UPLOAD_DIR', dirname(__DIR__) . '/uploads/');
+define('MAX_IMAGE_SIDE', 800);            // longest side after resize (px)
+define('MAX_IMAGE_BYTES', 5 * 1024 * 1024);
+
+/**
+ * The image row for a product, or null if it has none.
+ */
+function page_image(PDO $pdo, int $page_id): ?array {
+    $stmt = $pdo->prepare(
+        'SELECT * FROM images WHERE page_id = ? ORDER BY image_id DESC LIMIT 1'
+    );
+    $stmt->execute([$page_id]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+/**
+ * Image rows for MANY products in one query (for list/gallery pages,
+ * so we do not run one query per tile).
+ *
+ * @return array<int,string>  page_id => filename
+ */
+function page_images(PDO $pdo, array $page_ids): array {
+    $ids = array_values(array_filter(array_map('intval', $page_ids), fn($i) => $i > 0));
+    if (!$ids) {
+        return [];
+    }
+    $in   = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT page_id, filename FROM images WHERE page_id IN ($in)
+          ORDER BY image_id"
+    );
+    $stmt->execute($ids);
+    $map = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $map[(int)$r['page_id']] = $r['filename'];   // later rows win = newest
+    }
+    return $map;
+}
+
+/**
+ * The "image-ness" test. getimagesize() parses the actual file header,
+ * so a script renamed to .jpg fails here no matter what the extension
+ * or browser-sent MIME type claims.
+ * Returns [ok(bool), error(string), type(int)].
+ */
+function image_upload_check(array $file): array {
+    if (!isset($file['error']) || $file['error'] === UPLOAD_ERR_NO_FILE) {
+        return [false, '', 0];                 // nothing chosen — that is fine
+    }
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return [false, 'The file failed to upload. Please try again.', 0];
+    }
+    if (!is_uploaded_file($file['tmp_name'])) {
+        return [false, 'Invalid upload.', 0];
+    }
+    if ($file['size'] > MAX_IMAGE_BYTES) {
+        return [false, 'Image too large (5 MB maximum).', 0];
+    }
+    $info = @getimagesize($file['tmp_name']);
+    if ($info === false) {
+        return [false, 'That file is not a valid image.', 0];
+    }
+    $allowed = [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_GIF, IMAGETYPE_WEBP];
+    if (!in_array($info[2], $allowed, true)) {
+        return [false, 'Only JPEG, PNG, GIF or WEBP images are allowed.', 0];
+    }
+    return [true, '', $info[2]];
+}
+
+/**
+ * Resize with GD so the longest side is at most MAX_IMAGE_SIDE and
+ * write to $dest. Re-encodes, so the file size genuinely changes.
+ */
+function image_resize_save(string $src, string $dest, int $type): bool {
+    [$w, $h] = getimagesize($src);
+    switch ($type) {
+        case IMAGETYPE_JPEG: $img = @imagecreatefromjpeg($src); break;
+        case IMAGETYPE_PNG:  $img = @imagecreatefrompng($src);  break;
+        case IMAGETYPE_GIF:  $img = @imagecreatefromgif($src);  break;
+        case IMAGETYPE_WEBP: $img = @imagecreatefromwebp($src); break;
+        default: return false;
+    }
+    if (!$img) {
+        return false;
+    }
+
+    $longest = max($w, $h);
+    if ($longest <= MAX_IMAGE_SIDE) {
+        $nw = $w; $nh = $h;
+    } else {
+        $scale = MAX_IMAGE_SIDE / $longest;
+        $nw = (int)round($w * $scale);
+        $nh = (int)round($h * $scale);
+    }
+
+    $canvas = imagecreatetruecolor($nw, $nh);
+    if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_GIF) {
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        imagefilledrectangle($canvas, 0, 0, $nw, $nh,
+            imagecolorallocatealpha($canvas, 0, 0, 0, 127));
+    }
+    imagecopyresampled($canvas, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+
+    $ok = false;
+    switch ($type) {
+        case IMAGETYPE_JPEG: $ok = imagejpeg($canvas, $dest, 85); break;
+        case IMAGETYPE_PNG:  $ok = imagepng($canvas, $dest, 6);   break;
+        case IMAGETYPE_GIF:  $ok = imagegif($canvas, $dest);      break;
+        case IMAGETYPE_WEBP: $ok = imagewebp($canvas, $dest, 85); break;
+    }
+    imagedestroy($img);
+    imagedestroy($canvas);
+    return $ok;
+}
+
+/**
+ * Accept an upload for a product: validate, resize, store, record.
+ * Replaces any previous image (one per product). Returns '' on success
+ * or when no file was chosen; otherwise an error message. A rejected
+ * file never reaches the disk or the database.
+ */
+function page_image_save(PDO $pdo, int $page_id, array $file): string {
+    [$ok, $error, $type] = image_upload_check($file);
+    if (!$ok) {
+        return $error;                        // '' when no file chosen
+    }
+
+    $ext      = image_type_to_extension($type, false);
+    $filename = 'p' . $page_id . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+
+    if (!is_dir(UPLOAD_DIR)) {
+        mkdir(UPLOAD_DIR, 0775, true);
+    }
+    if (!image_resize_save($file['tmp_name'], UPLOAD_DIR . $filename, $type)) {
+        return 'The image could not be processed.';
+    }
+
+    page_image_delete($pdo, $page_id);        // replace, never accumulate
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO images (page_id, filename, original_name) VALUES (?, ?, ?)'
+    );
+    $stmt->execute([$page_id, $filename, mb_substr($file['name'] ?? '', 0, 255)]);
+    return '';
+}
+
+/**
+ * Remove a product image from the database AND the file system.
+ */
+function page_image_delete(PDO $pdo, int $page_id): void {
+    $stmt = $pdo->prepare('SELECT filename FROM images WHERE page_id = ?');
+    $stmt->execute([$page_id]);
+    foreach ($stmt->fetchAll() as $row) {
+        $path = UPLOAD_DIR . $row['filename'];
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+    $del = $pdo->prepare('DELETE FROM images WHERE page_id = ?');
+    $del->execute([$page_id]);
+}
