@@ -1,0 +1,20 @@
+# ============================================================
+# Requirement 5.5 — "super pretty" permalinks via mod_rewrite.
+# Maps  /id/slug-text/  onto  page.php?id=ID&slug=SLUG
+# so no ?, =, & or + appears in the address bar.
+# ============================================================
+RewriteEngine On
+
+# Works whether the app sits at the web root or in a subfolder such as
+# /module6/maayi/cms/ — RewriteBase is not hardcoded; instead real files
+# and directories are served directly and only /id/slug/ is rewritten.
+
+# 1. If the request maps to a real file or folder, leave it alone
+#    (css, images in /uploads, /admin pages, etc.).
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 2. /id/slug/  ->  page.php?id=ID&slug=SLUG
+#    id = digits only; slug = lowercase letters, numbers, dashes.
+RewriteRule ^([0-9]+)/([a-z0-9-]+)/?$ page.php?id=$1&slug=$2 [L,QSA]

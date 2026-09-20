@@ -66,7 +66,7 @@ if ($searched) {
     $offset = ($current - 1) * RESULTS_PER_PAGE;
 
     // ---- Fetch only this page's worth of results ----
-    $sql = "SELECT pages.page_id, pages.title, pages.price,
+    $sql = "SELECT pages.page_id, pages.title, pages.slug, pages.price,
                    categories.name AS category_name
               FROM pages
               LEFT JOIN categories ON pages.category_id = categories.category_id
@@ -156,7 +156,7 @@ require_once __DIR__ . '/includes/header.php';
         <ul class="product-list">
             <?php foreach ($results as $r): ?>
                 <li>
-                    <a href="<?= url('page.php?id=' . $r['page_id']) ?>"><?= e($r['title']) ?></a>
+                    <a href="<?= permalink((int)$r['page_id'], $r['slug']) ?>"><?= e($r['title']) ?></a>
                     <span class="meta">
                         <?= $r['category_name'] ? e($r['category_name']) : 'Uncategorised' ?>
                         <?php if ($dist_id !== null): ?>

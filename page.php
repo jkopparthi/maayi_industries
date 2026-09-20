@@ -9,7 +9,11 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/functions.php';
 
-$id = clean_id($_GET['id'] ?? null);
+$id   = clean_id($_GET['id'] ?? null);
+// Requirement 5.4/5.5: the URL carries BOTH the numeric id and the slug
+// (mod_rewrite passes them here as ?id=..&slug=..). They must match the
+// database TOGETHER - change either one and the URL stops working.
+$slug = strtolower(trim($_GET['slug'] ?? ''));
 
 $stmt = $pdo->prepare(
     'SELECT pages.*, categories.name AS category_name
@@ -20,8 +24,14 @@ $stmt = $pdo->prepare(
 $stmt->execute([$id]);
 $page = $stmt->fetch();
 
+// The id must exist AND the slug in the URL must be that page's slug.
+if ($page && $slug !== $page['slug']) {
+    $page = false;   // wrong slug for this id -> treat as not found
+}
+
 // No such page: show a simple message rather than a broken screen.
 if (!$page) {
+    http_response_code(404);
     $title = 'Page not found';
     require_once __DIR__ . '/includes/header.php';
     echo '<h1>Page not found</h1>';
@@ -63,13 +73,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Redirect after saving so a refresh doesn't post the comment twice.
         $_SESSION['message'] = 'Thank you, your comment has been posted.';
-        header('Location: ' . url('page.php?id=' . $id));
+        header('Location: ' . permalink($id, $page['slug']));
         exit;
     }
 }
 
 // Newest comments first (requirement 2.9).
-$stmt = $pdo->prepare('SELECT * FROM comments WHERE page_id = ? ORDER BY created_at DESC');
+// Hidden comments (moderated by an admin) stay out of the public page.
+$stmt = $pdo->prepare(
+    'SELECT * FROM comments WHERE page_id = ? AND is_hidden = 0
+      ORDER BY created_at DESC'
+);
 $stmt->execute([$id]);
 $comments = $stmt->fetchAll();
 
@@ -79,47 +93,67 @@ require_once __DIR__ . '/includes/header.php';
 
 <p class="crumb"><a href="<?= url('index.php') ?>">&laquo; All products</a></p>
 
-<article class="box">
-    <h1><?= e($page['title']) ?></h1>
-    <?php if ($img): ?>
-        <img class="page-image"
-             src="<?= url('uploads/' . rawurlencode($img['filename'])) ?>"
-             alt="<?= e($page['title']) ?>">
-    <?php endif; ?>
-    <p class="meta">
-        <?= $page['category_name'] ? e($page['category_name']) : 'Uncategorised' ?>
-        <?php if ($pricing !== null): ?>
-            <?php if ($pricing['special']): ?>
-                &middot; <s>K<?= number_format($pricing['base'], 2) ?></s>
-                <strong>K<?= number_format($pricing['price'], 2) ?></strong>
-                <span class="hint">(your distributor price)</span>
-            <?php else: ?>
-                &middot; K<?= number_format($pricing['price'], 2) ?>
+<article class="product-detail">
+    <div class="row g-4">
+
+        <!-- LEFT: fixed image container, image centered inside it -->
+        <div class="col-md-5">
+            <div class="product-media">
+                <?php if ($img): ?>
+                    <img src="<?= url('uploads/' . rawurlencode($img['filename'])) ?>"
+                         alt="<?= e($page['title']) ?>">
+                <?php else: ?>
+                    <span class="product-media-placeholder">
+                        <span class="ph-letter"><?= e(mb_substr($page['title'], 0, 1)) ?></span>
+                        <span class="ph-brand">Maayi</span>
+                    </span>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- RIGHT: title, price, and add-to-cart beside the image -->
+        <div class="col-md-7">
+            <h1><?= e($page['title']) ?></h1>
+
+            <p class="meta">
+                <?= $page['category_name'] ? e($page['category_name']) : 'Uncategorised' ?>
+                <?php if ($pricing !== null): ?>
+                    <?php if ($pricing['special']): ?>
+                        &middot; <s>K<?= number_format($pricing['base'], 2) ?></s>
+                        <strong>K<?= number_format($pricing['price'], 2) ?></strong>
+                        <span class="hint">(your distributor price)</span>
+                    <?php else: ?>
+                        &middot; <strong>K<?= number_format($pricing['price'], 2) ?></strong>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </p>
+
+            <?php if ($pricing === null): ?>
+                <p class="hint">Prices are shown to approved distributors. <?php
+                    if (!logged_in()) {
+                        echo '<a href="' . url('login.php') . '">Log in</a> or <a href="'
+                           . url('register.php') . '">register</a>.';
+                    } elseif (($_SESSION['role'] ?? '') === 'member') {
+                        echo '<a href="' . url('apply.php') . '">Apply to become a distributor</a>.';
+                    }
+                ?></p>
             <?php endif; ?>
-        <?php endif; ?>
-    </p>
-    <?php if ($pricing === null): ?>
-        <p class="hint">Prices are shown to approved distributors. <?php
-            if (!logged_in()) {
-                echo '<a href="' . url('login.php') . '">Log in</a> or <a href="'
-                   . url('register.php') . '">register</a>.';
-            } elseif (($_SESSION['role'] ?? '') === 'member') {
-                echo '<a href="' . url('apply.php') . '">Apply to become a distributor</a>.';
-            }
-        ?></p>
-    <?php endif; ?>
-    <?php if ($dist_id !== null): ?>
-        <form method="post" action="<?= url('cart.php') ?>" class="add-to-cart">
-            <input type="hidden" name="action" value="add">
-            <input type="hidden" name="page_id" value="<?= (int)$page['page_id'] ?>">
-            <input type="hidden" name="return" value="<?= e(url('page.php?id=' . (int)$page['page_id'])) ?>">
-            <label>Qty
-                <input type="number" name="quantity" value="1" min="1" style="width:4.5rem">
-            </label>
-            <button type="submit">Add to cart</button>
-        </form>
-    <?php endif; ?>
-    <p><?= nl2br(e($page['body'])) ?></p>
+
+            <?php if ($dist_id !== null): ?>
+                <form method="post" action="<?= url('cart.php') ?>" class="add-to-cart">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="page_id" value="<?= (int)$page['page_id'] ?>">
+                    <input type="hidden" name="return" value="<?= e(permalink((int)$page['page_id'], $page['slug'])) ?>">
+                    <label>Qty
+                        <input type="number" name="quantity" value="1" min="1" style="width:4.5rem">
+                    </label>
+                    <button type="submit" class="btn btn-primary">Add to cart</button>
+                </form>
+            <?php endif; ?>
+
+            <div class="product-body"><?= display_body($page['body']) ?></div>
+        </div>
+    </div>
 </article>
 
 <h2>Comments (<?= count($comments) ?>)</h2>

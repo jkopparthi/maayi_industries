@@ -41,7 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update') {
         foreach (($_POST['qty'] ?? []) as $pid => $qty) {
-            cart_set((int)$pid, (int)$qty);
+            // Requirement 4.2: validate the id as numeric, like everywhere else.
+            $pid = clean_id($pid);
+            if ($pid > 0) {
+                cart_set($pid, max(0, (int)$qty));
+            }
         }
         $_SESSION['message'] = 'Cart updated.';
         header('Location: ' . url('cart.php'));

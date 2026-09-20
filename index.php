@@ -28,7 +28,7 @@ $categories = $pdo->query(
       ORDER BY c.name'
 )->fetchAll();
 
-$sql = 'SELECT pages.page_id, pages.title, pages.price, pages.body,
+$sql = 'SELECT pages.page_id, pages.title, pages.slug, pages.price, pages.body,
                categories.name AS category_name
           FROM pages
           LEFT JOIN categories ON pages.category_id = categories.category_id';
@@ -81,16 +81,24 @@ require_once __DIR__ . '/includes/header.php';
 
 <?php else: ?>
     <!-- ============ PUBLIC GALLERY ============ -->
-    <h1>Our Products</h1>
-    <p class="hint">
-        Maayi Industries supplies purified waters, kombuchas, wines and spirits
-        to approved distributors across the region.
-        <?php if (!logged_in()): ?>
-            <a href="<?= url('register.php') ?>">Register</a> and apply to see wholesale pricing.
-        <?php elseif (($_SESSION['role'] ?? '') === 'member' && distributor_status($pdo) === null): ?>
-            <a href="<?= url('apply.php') ?>">Apply to become a distributor</a> to see wholesale pricing.
-        <?php endif; ?>
-    </p>
+    <section class="home-hero">
+        <div class="home-hero-inner">
+            <p class="eyebrow">Kasama · Zambia · Since day one</p>
+            <h1>Drinks made in Zambia, poured across the region.</h1>
+            <p>
+                Purified waters, small-batch kombuchas, wines and spirits — supplied
+                wholesale to distributors who move them town to town.
+            </p>
+            <p class="hero-actions">
+                <a class="button" href="<?= url('showcase.php') ?>">Enter the 3D showcase</a>
+                <?php if (!logged_in()): ?>
+                    <a class="button ghost-light" href="<?= url('register.php') ?>">Become a distributor</a>
+                <?php elseif (($_SESSION['role'] ?? '') === 'member' && distributor_status($pdo) === null): ?>
+                    <a class="button ghost-light" href="<?= url('apply.php') ?>">Apply for wholesale pricing</a>
+                <?php endif; ?>
+            </p>
+        </div>
+    </section>
 <?php endif; ?>
 
 <!-- Category filter row (both audiences) -->
@@ -110,8 +118,8 @@ require_once __DIR__ . '/includes/header.php';
 <?php else: ?>
 <div class="grid">
     <?php foreach ($pages as $p): ?>
-        <div class="tile">
-            <a class="tile-link" href="<?= url('page.php?id=' . $p['page_id']) ?>">
+        <div class="tile" data-cat="<?= e($p['category_name'] ?? '') ?>">
+            <a class="tile-link" href="<?= permalink((int)$p['page_id'], $p['slug']) ?>">
                 <span class="tile-media">
                     <?php if (isset($images[$p['page_id']])): ?>
                         <img src="<?= url('uploads/' . rawurlencode($images[$p['page_id']])) ?>"

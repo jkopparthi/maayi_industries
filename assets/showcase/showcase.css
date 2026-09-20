@@ -1,0 +1,544 @@
+/* ============================================================
+   3D Product Showcase — presentation layer
+   ------------------------------------------------------------
+   Everything here is scoped under .sc-root (or body.sc-page) so it
+   cannot leak into the catalog, the admin screens, or Bootstrap.
+
+   The palette is the brand's own copper/malachite/ochre read at
+   night: the catalog is warm paper, the showcase is the room the
+   bottle is lit in. One colour is NOT fixed — --sc-accent is rewritten
+   by JavaScript as each drink comes round, so the rail, the dial and
+   the buttons all take the colour of whatever you are looking at.
+   ============================================================ */
+
+body.sc-page {
+    background: #0a0d0c;
+    overflow-x: hidden;
+}
+body.sc-page .wrap { margin-top: 0; margin-bottom: 0; }
+body.sc-page .footbar { background: #0a0d0c; border-top: 1px solid rgba(239, 233, 221, .1); }
+
+.sc-root {
+    /* Break out of Bootstrap's .container without touching its markup */
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    position: relative;
+
+    --sc-void:  #0a0d0c;
+    --sc-deep:  #121817;
+    --sc-mist:  #efe9dd;
+    --sc-dim:   #808d88;
+    --sc-line:  rgba(239, 233, 221, .13);
+    --sc-accent: #b5561f;          /* rewritten per product */
+    --sc-rail-h: 56px;
+
+    --sc-mono: ui-monospace, SFMono-Regular, 'SF Mono', 'Roboto Mono', Menlo, monospace;
+
+    background: var(--sc-void);
+    color: var(--sc-mist);
+}
+
+/* ---------- Setup / empty states (light, they are admin messages) ---------- */
+.sc-setup { padding: 3rem 0 4rem; max-width: 620px; }
+.sc-setup h1 { margin-bottom: .8rem; }
+
+/* ============================================================
+   Sticky category rail
+   ============================================================ */
+.sc-rail {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    height: var(--sc-rail-h);
+    background: rgba(10, 13, 12, .82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--sc-line);
+}
+.sc-rail-inner {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0 clamp(1rem, 4vw, 3rem);
+}
+
+.sc-cats {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.sc-cats::-webkit-scrollbar { display: none; }
+
+.sc-cat {
+    font-family: var(--sc-mono);
+    font-size: .69rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--sc-dim);
+    background: none;
+    border: 0;
+    padding: .55rem .7rem;
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+    transition: color .25s;
+}
+.sc-cat::after {
+    /* the active marker is a rule that grows from the centre */
+    content: "";
+    position: absolute;
+    left: 50%; right: 50%; bottom: .25rem;
+    height: 2px;
+    background: var(--sc-accent);
+    transition: left .3s cubic-bezier(.4, 0, .2, 1),
+                right .3s cubic-bezier(.4, 0, .2, 1);
+}
+.sc-cat:hover { color: var(--sc-mist); }
+.sc-cat.is-active { color: var(--sc-mist); }
+.sc-cat.is-active::after { left: .7rem; right: .7rem; }
+.sc-cat:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+
+.sc-browse {
+    font-family: var(--sc-mono);
+    font-size: .69rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--sc-mist);
+    text-decoration: none;
+    white-space: nowrap;
+    padding: .5rem .9rem;
+    border: 1px solid var(--sc-line);
+    border-radius: 2px;
+    flex: none;
+    transition: border-color .2s, background .2s, color .2s;
+}
+.sc-browse:hover {
+    color: var(--sc-void);
+    background: var(--sc-mist);
+    border-color: var(--sc-mist);
+}
+
+/* ============================================================
+   The stage: sticks to the viewport while the track scrolls past
+   ============================================================ */
+.sc-track { position: relative; }
+
+.sc-stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100svh;
+    overflow: hidden;
+    padding-top: var(--sc-rail-h);
+    /* a low pool of the product's colour behind the bottle */
+    background:
+        radial-gradient(120% 90% at 68% 52%,
+            color-mix(in srgb, var(--sc-accent) 22%, transparent) 0%,
+            transparent 62%),
+        radial-gradient(80% 60% at 20% 100%, rgba(15, 92, 77, .16), transparent 70%),
+        var(--sc-void);
+    transition: background .8s linear;
+}
+
+#sc-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ---------- Loading ---------- */
+.sc-loading {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .8rem;
+    z-index: 3;
+    transition: opacity .5s;
+}
+.sc-root.is-ready .sc-loading { opacity: 0; pointer-events: none; }
+.sc-loading-bar {
+    display: block;
+    width: 140px; height: 1px;
+    background: var(--sc-line);
+    position: relative;
+}
+.sc-loading-bar i {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: var(--sc-accent);
+    transition: width .3s;
+}
+.sc-loading-text {
+    font-family: var(--sc-mono);
+    font-size: .68rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--sc-dim);
+}
+
+/* ============================================================
+   Product panel — left of centre, bottle right of centre
+   ============================================================ */
+.sc-panel {
+    position: absolute;
+    left: clamp(1.25rem, 6vw, 6rem);
+    top: 50%;
+    transform: translateY(-50%);
+    width: min(420px, 42vw);
+    z-index: 3;
+    pointer-events: none;   /* the canvas keeps the drag/scroll feel */
+}
+/* The render loop writes --sc-fade and --sc-shift every frame, so the
+   words track the rotation exactly instead of running their own timer. */
+.sc-panel > * {
+    /* A child cannot inherit the parent's pointer-events: none, so the
+       loop drives this too — otherwise a faded-out button stays
+       clickable and you can add an invisible product to your cart. */
+    pointer-events: var(--sc-pe, auto);
+    opacity: var(--sc-fade, 1);
+    transform: translateY(var(--sc-shift, 0px));
+}
+
+.sc-eyebrow {
+    font-family: var(--sc-mono);
+    font-size: .68rem;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--sc-dim);
+    margin: 0 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+}
+.sc-eyebrow #sc-count { color: var(--sc-accent); transition: color .5s; }
+.sc-slash { opacity: .4; }
+
+.sc-name {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 4.6vw, 3.6rem);
+    line-height: .96;
+    letter-spacing: -.035em;
+    color: var(--sc-mist);
+    margin: 0 0 1rem;
+    text-wrap: balance;
+}
+
+.sc-teaser {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #c3c9c5;
+    margin: 0 0 1.4rem;
+    max-width: 38ch;
+}
+
+/* The text fades with the rotation: full strength when the label is
+   facing you, gone by the time the bottle has turned its back. */
+.sc-fade {
+    transition: opacity .18s linear, transform .18s linear;
+    will-change: opacity, transform;
+}
+
+.sc-price { margin: 0 0 1.3rem; display: flex; align-items: baseline; gap: .6rem; }
+.sc-price-now {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--sc-mist);
+}
+.sc-price-was { font-size: .9rem; color: var(--sc-dim); text-decoration: line-through; }
+
+.sc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+
+.sc-btn {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: .9rem;
+    letter-spacing: .01em;
+    display: inline-block;
+    padding: .62rem 1.2rem;
+    border-radius: 2px;
+    border: 1px solid var(--sc-accent);
+    background: var(--sc-accent);
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .25s, border-color .25s, color .2s, transform .15s;
+}
+.sc-btn:hover { transform: translateY(-1px); filter: brightness(1.12); color: #fff; }
+.sc-btn:focus-visible { outline: 2px solid var(--sc-mist); outline-offset: 2px; }
+
+.sc-btn-ghost {
+    background: transparent;
+    border-color: var(--sc-line);
+    color: var(--sc-mist);
+}
+.sc-btn-ghost:hover { border-color: var(--sc-mist); filter: none; }
+
+.sc-btn-lg { padding: .85rem 1.9rem; font-size: 1rem; }
+
+.sc-add { display: flex; gap: .4rem; align-items: center; margin: 0; }
+.sc-qty {
+    width: 62px;
+    padding: .58rem .5rem;
+    background: transparent;
+    border: 1px solid var(--sc-line);
+    border-radius: 2px;
+    color: var(--sc-mist);
+    font-family: var(--sc-mono);
+    font-size: .9rem;
+    text-align: center;
+}
+.sc-qty:focus { outline: none; border-color: var(--sc-accent); }
+
+.sc-note {
+    margin: 1rem 0 0;
+    font-size: .8rem;
+    color: var(--sc-dim);
+    max-width: 34ch;
+}
+
+/* ============================================================
+   Rotation dial — the page's signature
+   Reads the bottle's real angle, so scrolling feels like turning
+   glass rather than moving a page.
+   ============================================================ */
+.sc-dial {
+    position: absolute;
+    right: clamp(.75rem, 2.5vw, 2.2rem);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+}
+.sc-dial-svg { width: 54px; height: 240px; overflow: visible; }
+.sc-dial-track, .sc-dial-fill {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+}
+.sc-dial-track { stroke: var(--sc-line); }
+.sc-dial-fill  { stroke: var(--sc-accent); transition: stroke .5s; }
+
+.sc-degrees {
+    font-family: var(--sc-mono);
+    font-size: .7rem;
+    letter-spacing: .1em;
+    color: var(--sc-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Scroll hint ---------- */
+.sc-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 1.8rem;
+    transform: translateX(-50%);
+    margin: 0;
+    z-index: 3;
+    font-family: var(--sc-mono);
+    font-size: .66rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--sc-dim);
+    white-space: nowrap;
+    transition: opacity .6s;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.sc-hint-key {
+    border: 1px solid var(--sc-line);
+    border-radius: 2px;
+    padding: .2rem .45rem;
+    color: #b6bfbb;
+}
+.sc-hint-sep { opacity: .35; }
+.sc-root.is-scrolled .sc-hint { opacity: 0; }
+
+/* ============================================================
+   Show more drawer
+   ============================================================ */
+.sc-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(5, 8, 7, .72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity .3s;
+}
+.sc-drawer.is-open { opacity: 1; }
+
+.sc-drawer-panel {
+    background: var(--sc-deep);
+    border-left: 1px solid var(--sc-line);
+    width: min(460px, 92vw);
+    height: 100%;
+    overflow-y: auto;
+    padding: clamp(1.5rem, 4vw, 2.6rem);
+    transform: translateX(100%);
+    transition: transform .38s cubic-bezier(.22, 1, .36, 1);
+}
+.sc-drawer.is-open .sc-drawer-panel { transform: translateX(0); }
+
+.sc-drawer-panel h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--sc-mist);
+    font-size: 1.8rem;
+    letter-spacing: -.03em;
+    margin: 0 0 1.2rem;
+}
+.sc-drawer-close {
+    position: absolute;
+    top: 1rem; right: 1.1rem;
+    background: none;
+    border: 0;
+    color: var(--sc-dim);
+    font-size: 1.8rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: .2rem .5rem;
+}
+.sc-drawer-close:hover { color: var(--sc-mist); }
+
+.sc-drawer-body { color: #c3c9c5; line-height: 1.75; }
+.sc-drawer-body p { margin: 0 0 1rem; }
+.sc-drawer-body h2, .sc-drawer-body h3, .sc-drawer-body h4 { color: var(--sc-mist); font-size: 1.1rem; }
+.sc-drawer-body a { color: var(--sc-accent); }
+.sc-drawer-body ul, .sc-drawer-body ol { padding-left: 1.2rem; }
+
+.sc-drawer-links { margin: 1.6rem 0 0; }
+.sc-drawer-links a {
+    font-family: var(--sc-mono);
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--sc-accent);
+    text-decoration: none;
+}
+.sc-drawer-links a:hover { text-decoration: underline; }
+
+/* ============================================================
+   Outro + fallback
+   ============================================================ */
+.sc-outro {
+    padding: clamp(4rem, 12vh, 8rem) clamp(1.25rem, 6vw, 6rem);
+    text-align: center;
+    border-top: 1px solid var(--sc-line);
+}
+.sc-outro .sc-eyebrow { justify-content: center; }
+.sc-outro h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--sc-mist);
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    letter-spacing: -.03em;
+    margin: 0 0 .9rem;
+}
+.sc-outro-copy {
+    color: var(--sc-dim);
+    max-width: 46ch;
+    margin: 0 auto 2rem;
+    line-height: 1.65;
+}
+
+.sc-fallback { padding: 3rem clamp(1.25rem, 6vw, 6rem) 5rem; }
+.sc-fallback h2 { font-family: 'Space Grotesk', sans-serif; color: var(--sc-mist); }
+.sc-fallback-list { list-style: none; margin: 2rem 0; padding: 0; display: grid; gap: 1.6rem; }
+.sc-fallback-list li {
+    display: flex;
+    gap: 1.4rem;
+    align-items: flex-start;
+    border-top: 1px solid var(--sc-line);
+    padding-top: 1.6rem;
+}
+.sc-fallback-list img { width: 96px; height: 96px; object-fit: contain; flex: none; }
+.sc-fallback-list h3 { margin: .2rem 0 .5rem; font-family: 'Space Grotesk', sans-serif; }
+.sc-fallback-list h3 a { color: var(--sc-mist); text-decoration: none; }
+.sc-fallback-list h3 a:hover { color: var(--sc-accent); }
+.sc-fallback-list p { color: var(--sc-dim); margin: 0; }
+.sc-fallback-price { color: var(--sc-mist) !important; font-weight: 600; margin-top: .5rem !important; }
+
+/* When 3D is unavailable the track collapses and the list takes over */
+.sc-root.is-fallback .sc-track,
+.sc-root.is-fallback .sc-dial { display: none; }
+
+/* ============================================================
+   Responsive — bottle centres, text drops below it, dial goes flat
+   ============================================================ */
+@media (max-width: 900px) {
+    .sc-root { --sc-rail-h: 50px; }
+
+    .sc-panel {
+        left: 0; right: 0;
+        top: auto;
+        bottom: 0;
+        width: auto;
+        transform: none;
+        padding: 1.5rem clamp(1.1rem, 5vw, 2rem) 2.2rem;
+        background: linear-gradient(to top,
+            rgba(10, 13, 12, .96) 0%,
+            rgba(10, 13, 12, .88) 55%,
+            transparent 100%);
+    }
+    .sc-teaser { font-size: .92rem; max-width: none; margin-bottom: 1rem; }
+    .sc-name { margin-bottom: .7rem; }
+    .sc-eyebrow { margin-bottom: .6rem; }
+
+    /* Dial becomes a thin horizontal rule under the rail */
+    .sc-dial {
+        top: calc(var(--sc-rail-h) + .6rem);
+        right: 0; left: 0;
+        transform: none;
+        flex-direction: row;
+        justify-content: center;
+        gap: .7rem;
+        padding: 0 1.1rem;
+    }
+    .sc-dial-svg { display: none; }
+    .sc-degrees {
+        font-size: .64rem;
+        border: 1px solid var(--sc-line);
+        border-radius: 2px;
+        padding: .18rem .5rem;
+    }
+
+    .sc-hint { bottom: auto; top: calc(var(--sc-rail-h) + 3rem); }
+
+    .sc-fallback-list li { flex-direction: column; gap: .8rem; }
+}
+
+@media (max-width: 560px) {
+    .sc-browse { font-size: .62rem; padding: .42rem .6rem; }
+    .sc-actions { gap: .45rem; }
+    .sc-btn { padding: .55rem .95rem; font-size: .85rem; }
+}
+
+/* ============================================================
+   Reduced motion — no scroll hijack, no spin. The list view is not a
+   downgrade here, it is the correct answer to the request.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+    .sc-root .sc-track, .sc-root .sc-dial { display: none; }
+    .sc-fallback { display: block !important; }
+    .sc-fade, .sc-cat::after, .sc-drawer, .sc-drawer-panel { transition: none !important; }
+}

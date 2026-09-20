@@ -495,6 +495,13 @@ function page_image_save(PDO $pdo, int $page_id, array $file): string {
         return $error;                        // '' when no file chosen
     }
 
+    // The resizer needs the GD extension. Fail with a clear message
+    // rather than a fatal error if it is not enabled in php.ini.
+    if (!function_exists('imagecreatefromjpeg')) {
+        return 'Image processing is unavailable: enable the "gd" extension '
+             . 'in php.ini (extension=gd) and restart Apache.';
+    }
+
     $ext      = image_type_to_extension($type, false);
     $filename = 'p' . $page_id . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
 
@@ -502,6 +509,10 @@ function page_image_save(PDO $pdo, int $page_id, array $file): string {
         mkdir(UPLOAD_DIR, 0775, true);
     }
     if (!image_resize_save($file['tmp_name'], UPLOAD_DIR . $filename, $type)) {
+        // If the encoder failed part-way, make sure no partial file remains.
+        if (is_file(UPLOAD_DIR . $filename)) {
+            @unlink(UPLOAD_DIR . $filename);
+        }
         return 'The image could not be processed.';
     }
 
@@ -528,4 +539,130 @@ function page_image_delete(PDO $pdo, int $page_id): void {
     }
     $del = $pdo->prepare('DELETE FROM images WHERE page_id = ?');
     $del->execute([$page_id]);
+}
+
+/* ---------------- Comment moderation + WYSIWYG ---------------- */
+
+/**
+ * Requirement 2.5 — "disemvoweling": strip the vowels from an abusive
+ * comment so it stays visible but becomes hard to read, without
+ * deleting the record.
+ */
+function disemvowel(string $text): string {
+    return preg_replace('/[aeiouAEIOU]/', '', $text);
+}
+
+/**
+ * Requirement 2.6 — sanitise WYSIWYG HTML with a whitelist.
+ *
+ * The editor submits real HTML, so the page body is the one field that
+ * must NOT be escaped with htmlspecialchars() (the tags would print as
+ * literal text). But echoing raw user HTML would allow stored XSS.
+ * Instead: parse it, keep only safe formatting tags, drop everything
+ * else. Runs ON SAVE, so what is stored is already safe to output.
+ */
+function sanitize_html(string $html): string {
+    if (trim($html) === '') {
+        return '';
+    }
+
+    $allowed_tags  = ['p','br','strong','b','em','i','u','s',
+                      'ul','ol','li','blockquote','h2','h3','h4','a'];
+    $allowed_attrs = ['a' => ['href','title','target','rel']];
+
+    $doc = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $doc->loadHTML(
+        '<?xml encoding="UTF-8"><div id="root">' . $html . '</div>',
+        LIBXML_HTML_NODEFDTD | LIBXML_HTML_NOIMPLIED
+    );
+    libxml_clear_errors();
+
+    $root = $doc->getElementById('root');
+    if (!$root) {
+        return '';
+    }
+
+    foreach (iterator_to_array($doc->getElementsByTagName('*')) as $el) {
+        if ($el === $root) {
+            continue;
+        }
+        $tag = strtolower($el->nodeName);
+
+        if (!in_array($tag, $allowed_tags, true)) {
+            if (in_array($tag, ['script','style','iframe','object','embed'], true)) {
+                // Dangerous: remove the element AND its contents.
+                if ($el->parentNode) {
+                    $el->parentNode->removeChild($el);
+                }
+            } else {
+                // Unknown but harmless (e.g. <span>): keep the text, drop the tag.
+                while ($el->firstChild) {
+                    $el->parentNode->insertBefore($el->firstChild, $el);
+                }
+                if ($el->parentNode) {
+                    $el->parentNode->removeChild($el);
+                }
+            }
+            continue;
+        }
+
+        // Strip every attribute not whitelisted (kills onclick, style, ...).
+        $permitted = $allowed_attrs[$tag] ?? [];
+        foreach (iterator_to_array($el->attributes) as $attr) {
+            $name = strtolower($attr->nodeName);
+            if (!in_array($name, $permitted, true)) {
+                $el->removeAttribute($attr->nodeName);
+            } elseif ($name === 'href'
+                      && preg_match('#^\s*(javascript|data|vbscript):#i', $attr->nodeValue)) {
+                $el->removeAttribute('href');
+            }
+        }
+        if ($tag === 'a' && $el->getAttribute('target') === '_blank') {
+            $el->setAttribute('rel', 'noopener noreferrer');
+        }
+    }
+
+    $out = '';
+    foreach ($root->childNodes as $child) {
+        $out .= $doc->saveHTML($child);
+    }
+    return trim($out);
+}
+
+/**
+ * Display a product body. New/edited products hold sanitised HTML from
+ * the editor; products saved before the editor existed hold plain text.
+ * Plain text keeps the old nl2br treatment so nothing already in the
+ * database changes appearance.
+ */
+function display_body(string $body): string {
+    if (strpos($body, '<') === false) {
+        return nl2br(e($body));       // legacy plain text
+    }
+    return $body;                     // sanitised HTML, safe as stored
+}
+
+/* ---------------- SEO permalinks (requirements 5.4 / 5.5) ---------------- */
+
+/**
+ * Requirement 5.4 — turn any text into URL "slug" form:
+ * lowercase, spaces (and runs of punctuation) become single dashes,
+ * everything except a-z 0-9 and dashes is dropped.
+ *   "Black Diamond  Whisky!" -> "black-diamond-whisky"
+ */
+function slugify(string $text): string {
+    $text = strtolower(trim($text));
+    $text = preg_replace('/[^a-z0-9]+/', '-', $text);   // spaces & punctuation -> dash
+    $text = trim($text, '-');
+    return $text !== '' ? $text : 'page';
+}
+
+/**
+ * Requirement 5.5 — build the "super pretty" permalink for a page:
+ *   /12/black-diamond-whisky/
+ * (Apache mod_rewrite in .htaccess maps this back onto page.php.)
+ */
+function permalink(int $id, string $slug): string {
+    return url($id . '/' . $slug . '/');
 }

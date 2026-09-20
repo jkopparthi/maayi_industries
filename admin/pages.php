@@ -29,7 +29,9 @@ $column = $allowed_sorts[$sort];
 $dir = (($_GET['dir'] ?? 'asc') === 'desc') ? 'DESC' : 'ASC';
 
 // ---- The query. MySQL does the sorting. ----
-$sql = "SELECT pages.*, categories.name AS category_name
+$sql = "SELECT pages.*, categories.name AS category_name,
+               (SELECT COUNT(*) FROM comments WHERE comments.page_id = pages.page_id) AS comment_count,
+               (SELECT COUNT(*) FROM comments WHERE comments.page_id = pages.page_id AND comments.is_hidden = 0) AS visible_comment_count
         FROM pages
         LEFT JOIN categories ON pages.category_id = categories.category_id
         ORDER BY $column $dir";
@@ -80,13 +82,21 @@ require_once __DIR__ . '/../includes/header.php';
 
     <?php foreach ($pages as $p): ?>
         <tr>
-            <td><?= e($p['title']) ?></td>
+            <td>
+                <?= e($p['title']) ?>
+                <?php if ((int)$p['comment_count'] > 0): ?>
+                    <a class="badge-hidden" style="text-decoration:none"
+                       href="<?= url('admin/page-form.php?id=' . $p['page_id'] . '#comments') ?>">
+                        <?= (int)$p['comment_count'] ?> comment<?= (int)$p['comment_count'] === 1 ? '' : 's' ?>
+                    </a>
+                <?php endif; ?>
+            </td>
             <td><?= $p['category_name'] ? e($p['category_name']) : '—' ?></td>
             <td>K<?= number_format((float)$p['price'], 2) ?></td>
             <td><?= date('Y-m-d', strtotime($p['created_at'])) ?></td>
             <td><?= date('Y-m-d', strtotime($p['updated_at'])) ?></td>
             <td class="actions">
-                <a href="<?= url('page.php?id=' . $p['page_id']) ?>">View</a>
+                <a href="<?= permalink((int)$p['page_id'], $p['slug']) ?>">View</a>
                 <a href="<?= url('admin/page-form.php?id=' . $p['page_id']) ?>">Edit</a>
                 <a class="delete"
                    href="<?= url('admin/page-delete.php?id=' . $p['page_id']) ?>"

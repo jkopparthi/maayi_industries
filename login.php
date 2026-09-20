@@ -2,9 +2,10 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/functions.php';
 
-// Already signed in? Go straight to the admin list.
+// Already signed in? Admins get the admin list; everyone else —
+// distributors included — goes straight to the products they can order.
 if (logged_in()) {
-    header('Location: ' . url('admin/pages.php'));
+    header('Location: ' . url(is_admin() ? 'admin/pages.php' : 'index.php'));
     exit;
 }
 
